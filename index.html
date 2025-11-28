@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nomad Tax Globe | 2025 Intelligence</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #050508;
+            --glass-bg: rgba(15, 15, 25, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --primary: #00ff9d; /* Cyberpunk Green */
+            --secondary: #d100d1; /* Magenta */
+            --text-main: #ffffff;
+            --text-muted: #8b9bb4;
+            --danger: #ff2a2a;
+            --success: #00ff9d;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* 3D Canvas handles scroll */
+            width: 100vw;
+            height: 100vh;
+        }
+
+        h1, h2, h3, .brand { font-family: 'Space Grotesk', sans-serif; }
+
+        /* --- 3D Canvas --- */
+        #webgl-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+        }
+
+        /* --- UI Overlay --- */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none; /* Let clicks pass to 3D */
+            display: flex;
+            justify-content: space-between;
+            padding: 2rem;
+        }
+
+        /* --- Glassmorphism Panels --- */
+        .panel {
+            pointer-events: auto;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* Scrollbar styling */
+        .panel::-webkit-scrollbar { width: 6px; }
+        .panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+        /* Left Panel */
+        #controls-panel {
+            width: 320px;
+            transform: translateX(0);
+        }
+
+        /* Right Panel */
+        #details-panel {
+            width: 400px;
+            transform: translateX(120%); /* Hidden initially */
+            opacity: 0;
+        }
+
+        #details-panel.active {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        /* --- Components --- */
+        .brand {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(90deg, #fff, var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .input-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+        
+        select, input[type="text"] {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 0.8rem;
+            border-radius: 8px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        select:focus, input:focus { border-color: var(--primary); }
+
+        /* Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 10px var(--primary);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+
+        .checkbox-group {
+            display: flex; flex-wrap: wrap; gap: 0.5rem;
+        }
+        .chip {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid transparent;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .chip.active {
+            background: rgba(0, 255, 157, 0.15);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Detail View Styles */
+        .detail-header { border-bottom: 1px solid var(--glass-border); padding-bottom: 1rem; margin-bottom: 1rem; }
+        .country-name { font-size: 2rem; font-weight: 700; margin-bottom: 0.2rem; }
+        .net-income { font-size: 1.8rem; font-weight: 600; color: var(--success); display: flex; align-items: center; gap: 10px; }
+        .net-income.negative { color: var(--danger); }
+        .col-label { font-size: 0.9rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
+        
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            padding: 10px; border-radius: 8px;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .stat-val { font-size: 1.1rem; font-weight: 600; }
+        .stat-title { font-size: 0.75rem; color: var(--text-muted); }
+
+        .chart-container { position: relative; height: 150px; width: 100%; margin-top: 1rem; }
+        
+        .img-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 1rem; }
+        .img-gallery div {
+            height: 60px; background-color: #333; border-radius: 6px; 
+            background-size: cover; background-position: center;
+        }
+
+        /* Tooltip (Globe Hover) */
+        #tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid var(--primary);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 0.9rem;
+            transform: translate(-50%, -150%);
+            z-index: 20;
+            white-space: nowrap;
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            #ui-layer { flex-direction: column; pointer-events: none; padding: 1rem; }
+            .panel { pointer-events: auto; width: 100%; max-height: 40vh; }
+            #controls-panel { margin-bottom: 1rem; transform: translateY(0); order: 2; }
+            #details-panel { position: absolute; bottom: 0; left: 0; width: 100%; transform: translateY(110%); order: 1; z-index: 50; }
+            #details-panel.active { transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="webgl-container"></div>
+    <div id="tooltip"></div>
+
+    <div id="ui-layer">
+        <div id="controls-panel" class="panel">
+            <div class="brand">NOMAD TAX GLOBE</div>
+            
+            <div class="input-group">
+                <label>Nationalität (Pass)</label>
+                <select id="nationality">
+                    <option value="DE">Deutschland</option>
+                    <option value="AT">Österreich</option>
+                    <option value="CH">Schweiz</option>
+                    <option value="US">USA</option>
+                    <option value="UK">United Kingdom</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Einkommensquellen</label>
+                <div class="checkbox-group" id="sources">
+                    <div class="chip active" data-val="remote">Remote Arbeit</div>
+                    <div class="chip" data-val="capital">Kapital/Aktien</div>
+                    <div class="chip" data-val="crypto">Krypto</div>
+                    <div class="chip" data-val="business">Eigenes Business</div>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Jahres-Brutto: <span id="income-val" style="color:white">120.000 €</span></label>
+                <input type="range" id="income-slider" min="30000" max="5000000" step="5000" value="120000">
+            </div>
+
+            <div class="input-group">
+                <label>Vermögen: <span id="wealth-val" style="color:white">250.000 €</span></label>
+                <input type="range" id="wealth-slider" min="50000" max="10000000" step="50000" value="250000">
+            </div>
+
+            <div class="input-group">
+                <label>Präferenzen</label>
+                <div class="checkbox-group" id="prefs">
+                    <div class="chip" data-val="warm">Warm</div>
+                    <div class="chip" data-val="lowtax">Low Tax</div>
+                    <div class="chip" data-val="ocean">Meer</div>
+                    <div class="chip" data-val="safe">Sicher</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="details-panel" class="panel">
+            <div id="details-content">
+                </div>
+            <button onclick="closeDetails()" style="margin-top:auto; padding:10px; background:rgba(255,255,255,0.1); border:none; color:white; cursor:pointer;">Schließen</button>
+        </div>
+    </div>
+
+    <script type="x-shader/x-vertex" id="vertexShader">
+        varying vec3 vNormal;
+        varying vec3 vPosition;
+        void main() {
+            vNormal = normalize(normalMatrix * normal);
+            vPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    </script>
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        varying vec3 vNormal;
+        void main() {
+            float intensity = pow(0.6 - dot(vNormal, vec3(0, 0, 1.0)), 4.0);
+            gl_FragColor = vec4(0.0, 0.8, 1.0, 1.0) * intensity;
+        }
+    </script>
+
+    <script>
+        // --- 1. DATA DATABASE (Simulation for 2025) ---
+        // Simplified Logic: 
+        // type: 'territorial', 'worldwide', 'none', 'remittance'
+        // taxRate: approximate effective rate
+        const countriesDB = [
+            { id: 1, name: "Vereinigte Arabische Emirate", lat: 23.42, lon: 53.84, taxType: 'none', baseTax: 0, col: 3500, internet: 95, safety: 98, visa: "Easy", region: "Middle East", keywords: ["warm", "lowtax", "safe", "ocean", "crypto"], images: ["https://images.unsplash.com/photo-1512453979798-5ea904ac6605?auto=format&fit=crop&w=400","https://images.unsplash.com/photo-1544367563-12123d8d5e64?auto=format&fit=crop&w=400"] },
+            { id: 2, name: "Portugal", lat: 39.39, lon: -8.22, taxType: 'special', baseTax: 20, col: 2100, internet: 88, safety: 92, visa: "D8 Nomad", region: "Europe", keywords: ["warm", "ocean", "crypto", "safe"], images: ["https://images.unsplash.com/photo-1555881400-74d7acaacd81?auto=format&fit=crop&w=400"] },
+            { id: 3, name: "Thailand", lat: 15.87, lon: 100.99, taxType: 'territorial', baseTax: 0, col: 1200, internet: 90, safety: 80, visa: "LTR Visa", region: "Asia", keywords: ["warm", "lowtax", "ocean", "cheap"], images: ["https://images.unsplash.com/photo-1552465011-b4e21bf6e79a?auto=format&fit=crop&w=400"] },
+            { id: 4, name: "Panama", lat: 8.53, lon: -80.78, taxType: 'territorial', baseTax: 0, col: 2200, internet: 75, safety: 70, visa: "Friendly Nations", region: "Americas", keywords: ["warm", "lowtax", "ocean", "business"], images: ["https://images.unsplash.com/photo-1569389397653-c03532321607?auto=format&fit=crop&w=400"] },
+            { id: 5, name: "Deutschland", lat: 51.16, lon: 10.45, taxType: 'worldwide', baseTax: 42, col: 3200, internet: 85, safety: 90, visa: "Citizen", region: "Europe", keywords: ["safe", "business"], images: ["https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&w=400"] },
+            { id: 6, name: "Estland", lat: 58.59, lon: 25.01, taxType: 'flat', baseTax: 20, col: 1800, internet: 99, safety: 95, visa: "E-Residency", region: "Europe", keywords: ["business", "crypto", "safe"], images: ["https://images.unsplash.com/photo-1565434033-14945f8e5b4b?auto=format&fit=crop&w=400"] },
+            { id: 7, name: "Georgien", lat: 42.31, lon: 43.35, taxType: 'territorial', baseTax: 1, col: 1100, internet: 70, safety: 85, visa: "1 Year Free", region: "Europe", keywords: ["cheap", "lowtax", "business"], images: ["https://images.unsplash.com/photo-1565008576549-57569a49371d?auto=format&fit=crop&w=400"] },
+            { id: 8, name: "Malaysia", lat: 4.21, lon: 101.97, taxType: 'territorial', baseTax: 0, col: 1300, internet: 85, safety: 78, visa: "MDEC", region: "Asia", keywords: ["warm", "lowtax", "cheap", "ocean"], images: ["https://images.unsplash.com/photo-1596422846543-75c6fc197f07?auto=format&fit=crop&w=400"] },
+            { id: 9, name: "Mexiko", lat: 23.63, lon: -102.55, taxType: 'worldwide', baseTax: 30, col: 1400, internet: 78, safety: 60, visa: "Temp Res", region: "Americas", keywords: ["warm", "cheap", "ocean"], images: ["https://images.unsplash.com/photo-1518105779142-d975f22f1b0a?auto=format&fit=crop&w=400"] },
+            { id: 10, name: "Schweiz", lat: 46.81, lon: 8.22, taxType: 'lump-sum', baseTax: 15, col: 5500, internet: 95, safety: 99, visa: "Hard", region: "Europe", keywords: ["safe", "business", "capital"], images: ["https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&w=400"] },
+            { id: 11, name: "Bali (Indonesien)", lat: -8.40, lon: 115.18, taxType: 'worldwide', baseTax: 10, col: 1500, internet: 65, safety: 80, visa: "2nd Home", region: "Asia", keywords: ["warm", "ocean", "cheap", "crypto"], images: ["https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=400"] },
+            { id: 12, name: "Zypern", lat: 35.12, lon: 33.42, taxType: 'non-dom', baseTax: 0, col: 2000, internet: 80, safety: 90, visa: "Easy", region: "Europe", keywords: ["warm", "lowtax", "crypto", "ocean"], images: ["https://images.unsplash.com/photo-1533604118674-3253759368d3?auto=format&fit=crop&w=400"] },
+        ];
+
+        // Procedural generation of filler countries to reach ~100 for visual density
+        const fillerRegions = [
+            {n: "Spanien", l: 40, ln: -3, t: 24, c: 2500}, {n: "Frankreich", l: 46, ln: 2, t: 30, c: 3000},
+            {n: "Italien", l: 41, ln: 12, t: 28, c: 2600}, {n: "Japan", l: 36, ln: 138, t: 20, c: 3000},
+            {n: "Australien", l: -25, ln: 133, t: 30, c: 4000}, {n: "Neuseeland", l: -40, ln: 174, t: 28, c: 3500},
+            {n: "Kanada", l: 56, ln: -106, t: 35, c: 3500}, {n: "Brasilien", l: -14, ln: -51, t: 27, c: 1200},
+            {n: "Südafrika", l: -30, ln: 25, t: 18, c: 1500}, {n: "Costa Rica", l: 9.7, ln: -83, t: 0, c: 1800}
+        ];
+        
+        let idCounter = 20;
+        fillerRegions.forEach(r => {
+            countriesDB.push({
+                id: idCounter++, name: r.n, lat: r.l, lon: r.ln, taxType: 'worldwide', baseTax: r.t, col: r.c,
+                internet: 80, safety: 80, visa: "Standard", region: "World", keywords: [], images: []
+            });
+        });
+
+        // --- 2. LOGIC ENGINE ---
+        
+        const state = {
+            income: 120000,
+            wealth: 250000,
+            sources: new Set(['remote']),
+            prefs: new Set(),
+            nationality: 'DE'
+        };
+
+        function calculateScore(country) {
+            let score = 50; // Base Score
+
+            // 1. Tax Logic (simplified)
+            let effectiveTax = country.baseTax;
+            
+            // Special rules simulation
+            if (state.sources.has('crypto') && (country.name === 'Portugal' || country.name === 'Vereinigte Arabische Emirate' || country.name === 'Deutschland')) {
+                // Portugal (Legacy rules) or UAE or Germany (after 1 year) is good for crypto
+                effectiveTax -= 5;
+            }
+            if (country.taxType === 'territorial' && state.sources.has('remote')) {
+                effectiveTax = 0; // Foreign income not taxed
+            }
+            if (country.taxType === 'none') effectiveTax = 0;
+
+            if (effectiveTax < 1) score += 40;
+            else if (effectiveTax < 10) score += 30;
+            else if (effectiveTax < 20) score += 15;
+            else if (effectiveTax > 35) score -= 20;
+
+            // 2. Cost of Living (CoL) relative to Net Income
+            const netIncome = state.income * ((100 - effectiveTax)/100);
+            const yearlyCoL = country.col * 12;
+            const savingsRate = (netIncome - yearlyCoL) / netIncome;
+
+            if (savingsRate > 0.7) score += 20;
+            else if (savingsRate > 0.5) score += 10;
+            else if (savingsRate < 0.2) score -= 20;
+
+            // 3. Preferences
+            if (state.prefs.has('warm') && (country.lat > 35 || country.lat < -35)) score -= 15;
+            if (state.prefs.has('warm') && (Math.abs(country.lat) < 30)) score += 10;
+            if (state.prefs.has('lowtax') && effectiveTax > 15) score -= 30;
+            if (state.prefs.has('safe') && country.safety < 70) score = 0; // Dealbreaker
+
+            return Math.max(0, Math.min(100, score));
+        }
+
+        // --- 3. THREE.JS SETUP ---
+        
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 18;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        document.getElementById('webgl-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 0.6;
+        controls.enablePan = false;
+        controls.minDistance = 12;
+        controls.maxDistance = 30;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+
+        // --- 4. GLOBE CONSTRUCTION ---
+
+        const globeGroup = new THREE.Group();
+        scene.add(globeGroup);
+
+        // Load Textures
+        const textureLoader = new THREE.TextureLoader();
+        // Use placeholder colored textures if assets not found, but logic assumes they exist in 'assets/'
+        const loadTex = (path) => textureLoader.load(path);
+
+        const earthMap = loadTex('assets/earth_day.jpg');
+        const earthNormal = loadTex('assets/earth_normal.jpg');
+        const earthSpec = loadTex('assets/earth_specular.jpg');
+        const earthLights = loadTex('assets/earth_night.jpg');
+        const earthClouds = loadTex('assets/earth_clouds.jpg');
+
+        // Core Globe
+        const geometry = new THREE.SphereGeometry(5, 64, 64);
+        const material = new THREE.MeshStandardMaterial({
+            map: earthMap,
+            normalMap: earthNormal,
+            roughnessMap: earthSpec, // Ocean smooth, land rough
+            metalness: 0.1,
+            roughness: 0.7,
+            emissiveMap: earthLights,
+            emissive: new THREE.Color(0xffff88),
+            emissiveIntensity: 0 // Start day
+        });
+        const earth = new THREE.Mesh(geometry, material);
+        globeGroup.add(earth);
+
+        // Clouds
+        const cloudGeo = new THREE.SphereGeometry(5.06, 64, 64);
+        const cloudMat = new THREE.MeshStandardMaterial({
+            map: earthClouds,
+            transparent: true,
+            opacity: 0.4,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide
+        });
+        const clouds = new THREE.Mesh(cloudGeo, cloudMat);
+        globeGroup.add(clouds);
+
+        // Atmosphere Glow (Shader)
+        const atmoGeo = new THREE.SphereGeometry(5.25, 64, 64);
+        const atmoMat = new THREE.ShaderMaterial({
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent,
+            blending: THREE.AdditiveBlending,
+            side: THREE.BackSide,
+            transparent: true,
+            opacity: 0.6
+        });
+        const atmosphere = new THREE.Mesh(atmoGeo, atmoMat);
+        scene.add(atmosphere); // Add to scene, not group, to prevent rotation if desired, or group if it should rotate
+
+        // --- 5. DATA VISUALIZATION (MARKERS) ---
+        
+        // Helper: Lat/Lon to Vector3
+        function latLonToVector3(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            const x = -(radius * Math.sin(phi) * Math.cos(theta));
+            const z = (radius * Math.sin(phi) * Math.sin(theta));
+            const y = (radius * Math.cos(phi));
+            return new THREE.Vector3(x, y, z);
+        }
+
+        const markersGroup = new THREE.Group();
+        globeGroup.add(markersGroup);
+        const markers = []; // Store references for raycasting
+
+        function createMarkers() {
+            // Clean up existing
+            while(markersGroup.children.length > 0){ 
+                markersGroup.remove(markersGroup.children[0]); 
+            }
+            markers.length = 0;
+
+            countriesDB.forEach(country => {
+                const score = calculateScore(country);
+                const pos = latLonToVector3(country.lat, country.lon, 5.08); // Slightly above surface
+
+                // Visual Representation: Hexagon/Cylinder Pillar
+                // Color scaling: Red (0) -> Yellow -> Green (100)
+                const color = new THREE.Color().setHSL(score / 300, 1.0, 0.5); // 0 red, 0.33 green
+                
+                // Height based on score
+                const height = 0.05 + (score / 100) * 0.4;
+                
+                const geo = new THREE.CylinderGeometry(0.04, 0.04, height, 6);
+                geo.translate(0, height/2, 0); // Pivot at bottom
+                geo.rotateX(Math.PI / 2); // Orient correctly before lookAt
+
+                const mat = new THREE.MeshBasicMaterial({ 
+                    color: color,
+                    transparent: true, 
+                    opacity: 0.8 
+                });
+                
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(pos);
+                mesh.lookAt(new THREE.Vector3(0,0,0));
+                
+                // Add Metadata
+                mesh.userData = { country: country, score: score };
+                
+                markersGroup.add(mesh);
+                markers.push(mesh);
+
+                // Add simple glow sprite behind
+                /* (Simplified to keep code short, optional addition) */
+            });
+        }
+
+        // --- 6. LIGHTING & ENVIRONMENT ---
+        
+        const ambientLight = new THREE.AmbientLight(0x404040, 2);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 2);
+        sunLight.position.set(20, 10, 10);
+        scene.add(sunLight);
+
+        // Starfield
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = 3000;
+        const starPos = new Float32Array(starCount * 3);
+        for(let i=0; i<starCount*3; i++) {
+            starPos[i] = (Math.random() - 0.5) * 600;
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+        const starMat = new THREE.PointsMaterial({color: 0xffffff, size: 0.5, transparent: true, opacity: 0.8});
+        const stars = new THREE.Points(starGeo, starMat);
+        scene.add(stars);
+
+        // --- 7. INTERACTION LOGIC ---
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let hoveredMarker = null;
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('click', onClick);
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            // Stop auto-rotate if hovering UI
+            const isHoveringUI = event.target.closest('.panel');
+            controls.autoRotate = !isHoveringUI;
+
+            // Tooltip Logic
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(markers);
+
+            const tooltip = document.getElementById('tooltip');
+
+            if (intersects.length > 0) {
+                const obj = intersects[0].object;
+                if (hoveredMarker !== obj) {
+                    // Hover start effect
+                    gsap.to(obj.scale, {x: 2, y: 2, z: 2, duration: 0.3});
+                    hoveredMarker = obj;
+                }
+                document.body.style.cursor = 'pointer';
+                tooltip.style.opacity = 1;
+                tooltip.style.left = event.clientX + 'px';
+                tooltip.style.top = event.clientY + 'px';
+                tooltip.innerHTML = `<strong>${obj.userData.country.name}</strong><br>Score: ${Math.round(obj.userData.score)}/100`;
+            } else {
+                if (hoveredMarker) {
+                    // Hover end effect
+                    gsap.to(hoveredMarker.scale, {x: 1, y: 1, z: 1, duration: 0.3});
+                    hoveredMarker = null;
+                }
+                document.body.style.cursor = 'default';
+                tooltip.style.opacity = 0;
+            }
+        }
+
+        function onClick(event) {
+            if (event.target.closest('.panel')) return;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(markers);
+            
+            if (intersects.length > 0) {
+                const data = intersects[0].object.userData.country;
+                showDetails(data);
+                
+                // Fly to country
+                const targetPos = intersects[0].object.position.clone().multiplyScalar(1.5);
+                gsap.to(camera.position, {
+                    x: targetPos.x, y: targetPos.y, z: targetPos.z,
+                    duration: 1.5,
+                    ease: "power2.out",
+                    onUpdate: () => controls.update()
+                });
+            }
+        }
+
+        // --- 8. UI LOGIC ---
+
+        // Bind Inputs
+        const els = {
+            incSlider: document.getElementById('income-slider'),
+            incVal: document.getElementById('income-val'),
+            wSlider: document.getElementById('wealth-slider'),
+            wVal: document.getElementById('wealth-val'),
+            chips: document.querySelectorAll('.chip')
+        };
+
+        const formatEUR = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+
+        els.incSlider.addEventListener('input', (e) => {
+            state.income = parseInt(e.target.value);
+            els.incVal.innerText = formatEUR(state.income);
+            debouncedUpdate();
+        });
+
+        els.wSlider.addEventListener('input', (e) => {
+            state.wealth = parseInt(e.target.value);
+            els.wVal.innerText = formatEUR(state.wealth);
+            debouncedUpdate();
+        });
+
+        els.chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                chip.classList.toggle('active');
+                const val = chip.dataset.val;
+                const set = chip.parentElement.id === 'sources' ? state.sources : state.prefs;
+                
+                if(set.has(val)) set.delete(val);
+                else set.add(val);
+                
+                debouncedUpdate();
+            });
+        });
+
+        let timeout;
+        function debouncedUpdate() {
+            clearTimeout(timeout);
+            timeout = setTimeout(createMarkers, 300);
+        }
+
+        // Detail Panel
+        function showDetails(country) {
+            const panel = document.getElementById('details-panel');
+            const content = document.getElementById('details-content');
+            
+            // Calculations
+            let effectiveTaxRate = country.baseTax; 
+            // Apply simple logic again for display
+            if(country.taxType === 'territorial' && state.sources.has('remote')) effectiveTaxRate = 0;
+            if(state.sources.has('crypto') && (country.name === 'Portugal' || country.name === 'UAE')) effectiveTaxRate = 0;
+
+            const taxAmount = state.income * (effectiveTaxRate / 100);
+            const net = state.income - taxAmount;
+            const yearlyCosts = country.col * 12;
+            const potentialSavings = net - yearlyCosts;
+
+            // Generate HTML
+            content.innerHTML = `
+                <div class="detail-header">
+                    <div class="country-name">${country.name}</div>
+                    <div class="net-income ${net < 0 ? 'negative' : ''}">${formatEUR(net)} <span style="font-size:0.6em; color:gray">netto/Jahr</span></div>
+                </div>
+
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-title">Steuersatz (Effektiv)</div>
+                        <div class="stat-val" style="color:${effectiveTaxRate < 15 ? '#00ff9d' : 'white'}">${effectiveTaxRate}%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Lebenshaltung</div>
+                        <div class="stat-val">${formatEUR(yearlyCosts)}/Jahr</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Potenzielles Sparen</div>
+                        <div class="stat-val" style="color:${potentialSavings > 0 ? '#00ff9d' : 'red'}">${formatEUR(potentialSavings)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Visum</div>
+                        <div class="stat-val">${country.visa}</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="costChart"></canvas>
+                </div>
+
+                <div style="margin-top:1rem">
+                    <div class="col-label"><span>Internet</span> <span>${country.internet}/100</span></div>
+                    <div style="height:4px; background:#333; margin-top:4px; border-radius:2px;"><div style="width:${country.internet}%; height:100%; background:var(--primary)"></div></div>
+                    
+                    <div class="col-label" style="margin-top:10px"><span>Sicherheit</span> <span>${country.safety}/100</span></div>
+                    <div style="height:4px; background:#333; margin-top:4px; border-radius:2px;"><div style="width:${country.safety}%; height:100%; background:var(--secondary)"></div></div>
+                </div>
+
+                <div class="img-gallery">
+                    ${country.images.length ? country.images.map(url => `<div style="background-image:url('${url}')"></div>`).join('') : '<div style="background:#222"></div><div style="background:#222"></div><div style="background:#222"></div>'}
+                </div>
+            `;
+
+            panel.classList.add('active');
+
+            // Render Chart
+            const ctx = document.getElementById('costChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Miete', 'Essen', 'Transport', 'Spaß'],
+                    datasets: [{
+                        label: 'Monatliche Kosten (€)',
+                        data: [country.col * 0.4, country.col * 0.3, country.col * 0.1, country.col * 0.2],
+                        backgroundColor: ['rgba(0, 255, 157, 0.6)', 'rgba(0, 255, 157, 0.4)', 'rgba(0, 255, 157, 0.3)', 'rgba(0, 255, 157, 0.2)'],
+                        borderColor: '#00ff9d',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } },
+                        x: { grid: { display: false }, ticks: { color: '#888' } }
+                    }
+                }
+            });
+        }
+
+        window.closeDetails = function() {
+            document.getElementById('details-panel').classList.remove('active');
+            // Reset camera zoom logic if needed
+        };
+
+        // --- 9. ANIMATION LOOP ---
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            
+            // Subtle rotation of clouds
+            clouds.rotation.y += 0.0005;
+
+            // Day/Night Cycle Simulation based on camera rotation (fake sun relative to camera)
+            // Or simpler: fixed sun, rotating earth.
+            // Adjust emissive intensity based on dot product with light
+            material.emissiveIntensity = 2.0; 
+
+            renderer.render(scene, camera);
+        }
+
+        // Init
+        createMarkers();
+        animate();
+
+        // Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
